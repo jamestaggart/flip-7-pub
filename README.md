@@ -10,7 +10,6 @@ From the repository root:
 
 ```bash
 docker compose up -d --build
-docker compose exec backend python manage.py migrate
 ```
 
 Open:
