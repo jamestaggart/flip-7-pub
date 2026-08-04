@@ -1,0 +1,13 @@
+{
+  "timestamp": "2026-08-04T02:44:06.494Z",
+  "frontend": {
+    "lines": 83.11,
+    "statements": 83.11,
+    "functions": 69.73,
+    "branches": 82.42
+  },
+  "backend": {
+    "lines": 92.97999999999999,
+    "branches": 68.33
+  }
+}
