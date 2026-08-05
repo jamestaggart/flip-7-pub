@@ -29,6 +29,8 @@ const MAX_PLAYERS = 30;
 const TARGET_PRESETS = [200, 300, 500, 750, 1000];
 const MIN_TARGET = 50;
 const MAX_TARGET = 2000;
+// Multi-device sync: how often an idle client re-fetches authoritative state.
+const POLL_INTERVAL_MS = 4000;
 
 const DEFAULT_SETTINGS: CreateSettings = {
   names: ['Player 1', 'Player 2'],
@@ -79,6 +81,7 @@ export default function HomePage() {
   const drewTimer = useRef<number | null>(null);
   const pendingRef = useRef<string | null>(null);
   const attemptedRestoreRef = useRef(false);
+  const stateRef = useRef<RawGameState | null>(null);
 
   // --- Initial load (splash -> lobby) ---------------------------------------
   const loadLobby = useCallback(async () => {
@@ -405,6 +408,61 @@ export default function HomePage() {
   }, [gameId, screen, refreshState, loadLobby]);
 
   const playAgain = useCallback(() => createGame(settings), [createGame, settings]);
+
+  // --- Multi-device sync -----------------------------------------------------
+  // Keep the latest state in a ref so the poll can detect transitions without
+  // recreating its interval on every tick.
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  // Poll authoritative state so a device that isn't acting still sees other
+  // players' turns. The backend is REST-only, so this is our sync mechanism.
+  useEffect(() => {
+    if (screen !== 'waiting' && screen !== 'active') return;
+    if (gameId == null) return;
+
+    let cancelled = false;
+    let inFlight = false;
+
+    const tick = async () => {
+      if (cancelled || inFlight) return;
+      // Save requests when backgrounded, and never disrupt the acting player.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (pendingRef.current) return;
+      if (targetSelection) return;
+      if (roundSummary) return;
+
+      inFlight = true;
+      try {
+        const prevRoundEnded = Boolean(stateRef.current?.round_ended);
+        const next = await api.getState(gameId);
+        if (cancelled) return;
+        setDisconnected(false);
+        // routeFromState updates state and routes to game_over when finished.
+        await routeFromState(next);
+        if (next.status === 'finished') return;
+        // A round started on another device: follow into the board.
+        if (screen === 'waiting' && next.round_id && !next.round_ended) {
+          setScreen('active');
+        }
+        // A round ended on someone else's turn: surface the summary here too.
+        if (screen === 'active' && next.round_ended && !prevRoundEnded) {
+          setRoundSummary(buildSummaryFromState(next));
+        }
+      } catch {
+        /* Transient poll failure — stay quiet; the next tick retries. */
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    const id = window.setInterval(tick, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [screen, gameId, targetSelection, roundSummary, routeFromState]);
 
   // --- Derived board data ----------------------------------------------------
   const activePlayer = useMemo(

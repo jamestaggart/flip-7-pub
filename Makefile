@@ -6,7 +6,7 @@
 DEV_COMPOSE  := docker-compose.dev.yml
 PROD_COMPOSE := docker-compose.prod.yml
 
-.PHONY: dev prod down clean logs prod-logs
+.PHONY: dev prod down clean logs prod-logs test
 
 dev: ## Start the development stack (creates .env.dev from the example if missing).
 	@test -f .env.dev || cp .env.dev.example .env.dev
@@ -29,3 +29,6 @@ logs: ## Tail development logs.
 
 prod-logs: ## Tail production logs.
 	docker compose -f $(PROD_COMPOSE) logs -f
+
+test: ## Run the full test suite (backend + frontend unit + e2e).
+	./scripts/regression.sh
