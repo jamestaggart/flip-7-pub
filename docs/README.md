@@ -2,7 +2,8 @@
 
 This directory contains the human-facing technical documentation for the current Flip 7 implementation.
 
-- [development.md](development.md) — local development workflow
+- [development.md](development.md) — local development workflow (`make dev`)
+- [hosting.md](hosting.md) — deploy to production on your own domain (`make prod`)
 - [architecture.md](architecture.md) — high-level system architecture and runtime data flow
 - [database.md](database.md) — database structure and Mermaid ER diagram
 - [api.md](api.md) — backend API surface used by the frontend

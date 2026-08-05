@@ -6,11 +6,11 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Select the environment: "dev" (default) or "prod". Set DJANGO_ENV to switch.
-# The matching backend/.env.<DJANGO_ENV> file is loaded if present. Real
-# environment variables (e.g. from Docker Compose) always take precedence.
+# When running outside Docker, the matching root .env.<DJANGO_ENV> file is loaded
+# if present. In Docker, Compose injects these vars and they take precedence.
 DJANGO_ENV = os.environ.get('DJANGO_ENV', 'dev').strip().lower()
 IS_PROD = DJANGO_ENV == 'prod'
-load_dotenv(BASE_DIR / f'.env.{DJANGO_ENV}')
+load_dotenv(BASE_DIR.parent / f'.env.{DJANGO_ENV}')
 
 
 def env_bool(name, default):
@@ -43,6 +43,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -97,6 +98,11 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage'},
+}
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # In dev, allow any origin. In prod, restrict via CORS_ALLOWED_ORIGINS.

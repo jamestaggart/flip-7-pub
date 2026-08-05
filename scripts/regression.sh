@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export COMPOSE_FILE=docker-compose.dev.yml
 SHOULD_DOWN=false
 
 for arg in "$@"; do

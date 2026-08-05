@@ -4,20 +4,17 @@ Thanks for contributing to Flip 7.
 
 ## Local setup
 
-1. Start services:
+Start the development stack (creates `.env.dev` from the example on first run):
 
 ```bash
-docker compose up -d --build
+make dev
 ```
 
-2. Apply migrations:
-
-```bash
-docker compose exec backend python manage.py migrate
-```
-
-3. Open the app:
+Open the app:
 - http://localhost:3000
+
+Migrations run automatically when the backend container starts. See
+[docs/development.md](docs/development.md) for details.
 
 ## Test expectations for pull requests
 
@@ -30,7 +27,7 @@ Run these before opening a PR:
 If you only changed backend logic, at minimum run:
 
 ```bash
-docker compose exec backend python manage.py test game.tests game.tests_coverage
+docker compose -f docker-compose.dev.yml exec backend python manage.py test game.tests game.tests_coverage
 ```
 
 If you only changed frontend logic, at minimum run:

@@ -1,11 +1,15 @@
+# Development stack: Postgres + Django (runserver) + Next.js (next dev).
+# Run with:  make dev   (which passes --env-file .env.dev)
+# Values fall back to sane dev defaults, so this also works with no .env.dev.
+
 services:
   db:
     image: postgres:16-alpine
     container_name: flip7-db
     environment:
-      POSTGRES_DB: flip7
-      POSTGRES_USER: flip7
-      POSTGRES_PASSWORD: flip7pass
+      POSTGRES_DB: ${POSTGRES_DB:-flip7}
+      POSTGRES_USER: ${POSTGRES_USER:-flip7}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flip7pass}
     ports:
       - "5432:5432"
     volumes:
@@ -24,13 +28,13 @@ services:
       - "8000:8000"
     environment:
       DJANGO_SETTINGS_MODULE: flip7_backend.settings
-      DJANGO_ENV: dev
-      FLIP7_TEST_SEED: local-dev-seed
-      POSTGRES_DB: flip7
-      POSTGRES_USER: flip7
-      POSTGRES_PASSWORD: flip7pass
-      POSTGRES_HOST: db
-      POSTGRES_PORT: 5432
+      DJANGO_ENV: ${DJANGO_ENV:-dev}
+      FLIP7_TEST_SEED: ${FLIP7_TEST_SEED:-local-dev-seed}
+      POSTGRES_DB: ${POSTGRES_DB:-flip7}
+      POSTGRES_USER: ${POSTGRES_USER:-flip7}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flip7pass}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
     depends_on:
       - db
 
@@ -46,7 +50,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - backend
 
