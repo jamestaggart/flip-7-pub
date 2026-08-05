@@ -1,0 +1,14 @@
+{$DOMAIN} {
+	encode gzip
+
+	# Backend serves the API, Django admin, and collected static files.
+	@backend path /api/* /admin/* /static/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else is the Next.js frontend.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

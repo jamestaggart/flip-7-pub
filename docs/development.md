@@ -1,28 +1,35 @@
 # Development guide
 
+**One rule:** for local development you edit exactly one file, `.env.dev`. For production you edit
+`.env.prod` instead — see [hosting.md](hosting.md).
+
 ## Quick start
 
 From the project root:
 
 ```bash
-docker compose up -d --build
+make dev
 ```
 
-Apply backend migrations:
-
-```bash
-docker compose exec backend python manage.py migrate
-```
+That copies `.env.dev.example` to `.env.dev` on first run, builds the stack, applies migrations
+automatically, and follows the logs. Defaults work out of the box; edit `.env.dev` only if you
+want to change them.
 
 Open the app at:
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
-- PostgreSQL: http://localhost:5432
+- PostgreSQL: localhost:5432
+
+Stop the stack with `make down`; view logs with `make logs`.
 
 ## Environment configuration
 
-The backend reads `DJANGO_ENV` to choose its environment: `dev` (default) or `prod`. On startup it loads `backend/.env.<DJANGO_ENV>` if present; real environment variables always win. Docker Compose sets `DJANGO_ENV=dev`, so local development needs no extra setup. Copy `backend/.env.dev.example` to `backend/.env.dev` to customize, or `backend/.env.prod.example` to `backend/.env.prod` for production. See the Self-hosting section in the root README for production requirements.
+Development configuration lives in a single root file, `.env.dev` (copied from
+`.env.dev.example`). The dev stack ([docker-compose.dev.yml](../docker-compose.dev.yml)) reads it
+via `--env-file .env.dev` and falls back to sane defaults, so the app runs even before you edit
+it. In dev, `DEBUG` is on and all hosts/CORS origins are allowed. Only the `*.example` template is
+tracked — never commit `.env.dev`.
 
 ## Running tests
 
@@ -31,13 +38,13 @@ The backend reads `DJANGO_ENV` to choose its environment: `dev` (default) or `pr
 Backend functional rule/requirement tests:
 
 ```bash
-docker compose exec backend python manage.py test game.tests
+docker compose -f docker-compose.dev.yml exec backend python manage.py test game.tests
 ```
 
 Backend coverage-focused tests:
 
 ```bash
-docker compose exec backend python manage.py test game.tests_coverage
+docker compose -f docker-compose.dev.yml exec backend python manage.py test game.tests_coverage
 ```
 
 Frontend functional tests:
@@ -111,8 +118,8 @@ Runs backend tests, frontend functional tests, and frontend E2E tests:
 ## Useful commands
 
 ```bash
-docker compose down
-docker compose down -v --remove-orphans
+make down
+docker compose -f docker-compose.dev.yml down -v --remove-orphans
 ```
 
 ## Troubleshooting

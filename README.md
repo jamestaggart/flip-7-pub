@@ -6,11 +6,15 @@ Project status: active solo project, suitable for local development and testing.
 
 ## Quick start
 
-From the repository root:
+There are exactly two modes, each one command and one env file:
+
+- **Develop:** `make dev` (edit `.env.dev`) — see [docs/development.md](docs/development.md)
+- **Host in production:** `make prod` (edit `.env.prod`) — see [docs/hosting.md](docs/hosting.md)
+
+To start developing from a fresh clone:
 
 ```bash
-docker compose up -d --build
-docker compose exec backend python manage.py migrate
+make dev
 ```
 
 Open:
@@ -20,32 +24,23 @@ Open:
 
 ## Self-hosting
 
-The backend selects its environment via the `DJANGO_ENV` variable: `dev` (default) or `prod`. On startup it loads the matching `backend/.env.<DJANGO_ENV>` file if present. Real environment variables (for example those injected by Docker Compose or your host) always take precedence.
+The app runs as a production stack (Django via gunicorn, Next.js production build, and Caddy for
+automatic HTTPS) with a single command. You edit **one** file, `.env.prod`, and set three values:
 
-### Development
-
-Local Docker development works out of the box — `DJANGO_ENV=dev` is set in `docker-compose.yml`, `DEBUG` is on, and all hosts/CORS origins are allowed. To customize, copy the example:
-
-```bash
-cp backend/.env.dev.example backend/.env.dev
-```
-
-### Production
-
-Copy the production template and fill in real values before deploying:
-
-```bash
-cp backend/.env.prod.example backend/.env.prod
-```
-
-Then run the backend with `DJANGO_ENV=prod`. In production, `DEBUG` is off and you **must** set:
-
+- `DOMAIN` — your domain (must have a DNS A record pointing at the server)
 - `DJANGO_SECRET_KEY` — a strong, unique key (the app refuses to start without it)
-- `DJANGO_ALLOWED_HOSTS` — comma-separated hostnames
-- `CORS_ALLOWED_ORIGINS` — comma-separated allowed frontend origins
 - `POSTGRES_PASSWORD` — a strong database password
 
-Never commit a populated `.env.dev` or `.env.prod`; only the `*.example` templates are tracked.
+Everything else (allowed hosts, CORS, HTTPS redirect, the frontend API URL) is derived from
+`DOMAIN` automatically. Then:
+
+```bash
+cp .env.prod.example .env.prod   # edit the three values above
+make prod
+```
+
+See [docs/hosting.md](docs/hosting.md) for the full step-by-step. Only the `*.example` templates
+are tracked; real `.env.dev` / `.env.prod` files are git-ignored and must never be committed.
 
 ## How to play
 
@@ -67,7 +62,7 @@ Run the full regression suite:
 Targeted test commands:
 
 ```bash
-docker compose exec backend python manage.py test game.tests game.tests_coverage
+docker compose -f docker-compose.dev.yml exec backend python manage.py test game.tests game.tests_coverage
 cd frontend && npm run test:unit:functional
 cd frontend && npx playwright test
 ```
