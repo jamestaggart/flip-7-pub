@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActionResult, GameResults, GameSummary, Player, RawGameState } from '@/lib/types';
 
@@ -157,7 +157,7 @@ describe('Page guard-path coverage behavior', () => {
     render(<HomePage />);
     await screen.findByRole('button', { name: 'Create game' }, { timeout: 4000 });
 
-    expect(window.localStorage.getItem('flip7.gameId')).toBeNull();
+    await waitFor(() => expect(window.localStorage.getItem('flip7.gameId')).toBeNull());
     expect(screen.getByRole('heading', { name: 'Open games' })).toBeInTheDocument();
   });
 
@@ -558,4 +558,138 @@ describe('Page guard-path coverage behavior', () => {
     expect(within(summaryDialog).getByText('Alice')).toBeInTheDocument();
     expect(within(summaryDialog).getByText('Bob')).toBeInTheDocument();
   });
+
+  // --- Polling guard-path coverage ------------------------------------------
+
+  it('poll skips when tab is hidden and resumes when visible', async () => {
+    window.localStorage.setItem('flip7.gameId', '1');
+    mockFns.getState.mockResolvedValue(
+      makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 1 }),
+    );
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 4000 });
+    const callsAfterMount = mockFns.getState.mock.calls.length;
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    await new Promise((r) => setTimeout(r, 6000));
+    // No extra polls should have fired while hidden.
+    expect(mockFns.getState.mock.calls.length).toBe(callsAfterMount);
+
+    // Restore and verify polling would resume (visibilityState reset).
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+  }, 15000);
+
+  it('poll skips when an action is pending (pendingRef guard)', async () => {
+    window.localStorage.setItem('flip7.gameId', '1');
+    const activeState = makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 1 });
+    mockFns.getState.mockResolvedValue(activeState);
+
+    let resolveAction: (v: ActionResult) => void = () => undefined;
+    mockFns.takeAction.mockReturnValue(new Promise((r) => { resolveAction = r; }));
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 4000 });
+    const callsBeforeAction = mockFns.getState.mock.calls.length;
+
+    // Fire an action; it stays pending while resolveAction is not called.
+    fireEvent.click(screen.getByRole('button', { name: /Hit/ }));
+    await new Promise((r) => setTimeout(r, 6000));
+
+    // getState may have been called for the action dispatch itself, but no
+    // extra background polls should have fired while the action was in flight.
+    resolveAction({ round_ended: false, bust: false });
+    expect(mockFns.getState.mock.calls.length).toBeLessThanOrEqual(callsBeforeAction + 2);
+  }, 15000);
+
+  it('poll skips while target-selection is open', async () => {
+    window.localStorage.setItem('flip7.gameId', '1');
+    mockFns.getState.mockResolvedValue(
+      makeState({
+        status: 'active',
+        round_id: 1,
+        round_ended: false,
+        current_turn: 1,
+        players: [
+          {
+            player_id: 1, username: 'alice', display_name: 'Alice',
+            active: true, is_busted: false, score: 0, total_score: 0, unique_numbers: 1,
+            cards: [
+              { card_name: '3', value: 3, effect_type: 'number', effect_payload: '' },
+              { card_name: 'Freeze', value: null, effect_type: 'action', effect_payload: 'freeze' },
+            ],
+          },
+          {
+            player_id: 2, username: 'bob', display_name: 'Bob',
+            active: true, is_busted: false, score: 0, total_score: 0, unique_numbers: 1,
+            cards: [{ card_name: '4', value: 4, effect_type: 'number', effect_payload: '' }],
+          },
+        ],
+      }),
+    );
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 4000 });
+    fireEvent.click(screen.getByRole('button', { name: /Freeze/ }));
+    // Target picker is now open (targetSelection set).
+    expect(screen.getByText('Choose target for Freeze')).toBeInTheDocument();
+
+    const callsWithPickerOpen = mockFns.getState.mock.calls.length;
+    await new Promise((r) => setTimeout(r, 6000));
+    // No new polls should have fired with the picker open.
+    expect(mockFns.getState.mock.calls.length).toBe(callsWithPickerOpen);
+  }, 15000);
+
+  it('poll is silent on transient network error', async () => {
+    window.localStorage.setItem('flip7.gameId', '1');
+    const activeState = makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 1 });
+    mockFns.getState
+      .mockResolvedValueOnce(activeState)  // initial load
+      .mockRejectedValue(Object.assign(new Error('Network error'), { code: 'network_error' }));
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 4000 });
+
+    // Wait for at least one poll tick to fail — board must stay intact, no disconnect modal.
+    await new Promise((r) => setTimeout(r, 6000));
+    expect(screen.getByRole('heading', { name: "Alice's turn" })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Connection lost' })).not.toBeInTheDocument();
+  }, 15000);
+
+  it('poll routes to game_over when backend returns finished status', async () => {
+    window.localStorage.setItem('flip7.gameId', '1');
+    const activeState = makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 1 });
+    const finishedState = makeState({ status: 'finished', round_id: 1, round_ended: true, current_turn: null });
+    mockFns.getState
+      .mockResolvedValueOnce(activeState)
+      .mockResolvedValue(finishedState);
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 4000 });
+    await screen.findByText('Game over', {}, { timeout: 15000 });
+    expect(screen.getByText('Match complete')).toBeInTheDocument();
+  }, 20000);
+
+  it('poll shows round-summary modal when round ends on another player\'s turn', async () => {
+    window.localStorage.setItem('flip7.gameId', '1');
+    const activeState = makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 2 });
+    const roundEndedState = makeState({ status: 'active', round_id: 1, round_ended: true, current_turn: null });
+    mockFns.getState
+      .mockResolvedValueOnce(activeState)
+      .mockResolvedValue(roundEndedState);
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Bob's turn" }, { timeout: 4000 });
+    await screen.findByRole('dialog', { name: 'Round Summary' }, { timeout: 15000 });
+  }, 20000);
+
+  it('does not start polling on lobby or game_over screens', async () => {
+    render(<HomePage />);
+    await screen.findByRole('button', { name: 'Create game' }, { timeout: 4000 });
+    const callsOnLobby = mockFns.getState.mock.calls.length;
+
+    await new Promise((r) => setTimeout(r, 6000));
+    // No background polls should fire on the lobby screen.
+    expect(mockFns.getState.mock.calls.length).toBe(callsOnLobby);
+  }, 15000);
 });

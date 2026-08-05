@@ -325,4 +325,35 @@ describe('Frontend app functional behavior', () => {
     fireEvent.click(within(summaryDialog).getByRole('button', { name: 'Next round' }));
     await waitFor(() => expect(mockApi.startRound).toHaveBeenCalledTimes(1));
   });
+
+  it('syncs another device\'s turn into the board via background polling', async () => {
+    const activeState = makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 1 });
+    mockApi.getState.mockResolvedValue(activeState);
+    window.localStorage.setItem('flip7.gameId', '1');
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 4000 });
+
+    // Another device advances play to Bob; polling should pick it up.
+    mockApi.getState.mockResolvedValue(
+      makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 2 }),
+    );
+
+    await screen.findByRole('heading', { name: "Bob's turn" }, { timeout: 6000 });
+  }, 15000);
+
+  it('follows the waiting room into the board when a round starts elsewhere', async () => {
+    mockApi.getState.mockResolvedValue(makeState({ status: 'pending', round_id: null, current_turn: null }));
+    window.localStorage.setItem('flip7.gameId', '1');
+
+    render(<HomePage />);
+    await screen.findByRole('heading', { name: 'Waiting room' }, { timeout: 4000 });
+
+    // A round is started on another device.
+    mockApi.getState.mockResolvedValue(
+      makeState({ status: 'active', round_id: 1, round_ended: false, current_turn: 1 }),
+    );
+
+    await screen.findByRole('heading', { name: "Alice's turn" }, { timeout: 6000 });
+  }, 15000);
 });
